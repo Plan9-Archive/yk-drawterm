@@ -540,18 +540,21 @@ setcolor(ulong index, ulong red, ulong green, ulong blue)
 {
 }
 
+int		fromutf16(char*,int,uchar*,int);
+int		toutf16(uchar*,int,char*,int);
 
 uchar*
 clipreadunicode(HANDLE h)
 {
 	Rune *p;
-	int n;
+	int n, nq;
 	uchar *q;
 	
 	p = GlobalLock(h);
-	n = wstrutflen(p)+1;
-	q = malloc(n);
-	wstrtoutf(q, p, n);
+	n = GlobalSize(h);
+	nq = n*UTFmax/2;
+	q = malloc(nq);
+	fromutf16(q, nq, p, n);
 	GlobalUnlock(h);
 
 	return q;
@@ -612,15 +615,11 @@ clipwrite(char *buf)
 		return -1;
 	}
 
-	h = GlobalAlloc(GMEM_MOVEABLE|GMEM_DDESHARE, (n+1)*sizeof(Rune));
+	h = GlobalAlloc(GMEM_MOVEABLE|GMEM_DDESHARE, 2*(n+1)*sizeof(Rune));
 	if(h == NULL)
 		panic("out of memory");
 	rp = GlobalLock(h);
-	p = buf;
-	e = p+n;
-	while(p<e)
-		p += chartorune(rp++, p);
-	*rp = 0;
+	toutf16(rp, GlobalSize(h), buf, n+1);
 	GlobalUnlock(h);
 
 	SetClipboardData(CF_UNICODETEXT, h);
