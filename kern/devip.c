@@ -426,8 +426,8 @@ ipread(Chan *ch, void *a, long n, vlong offset)
 	case Qstatus:
 		x = &proto[PROTO(ch->qid)];
 		c = x->conv[CONV(ch->qid)];
-		sprint(buf, "%s/%d %d %s \n",
-			c->p->name, c->x, c->r.ref, c->state);
+		sprint(buf, "%s proto %s x %d r.ref %d\n",
+			c->state, c->p->name, c->x, c->r.ref);
 		return readstr(offset, p, n, buf);
 	case Qdata:
 		c = proto[PROTO(ch->qid)].conv[CONV(ch->qid)];
