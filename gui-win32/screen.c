@@ -325,9 +325,12 @@ WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
 	PAINTSTRUCT paint;
 	HDC hdc;
-	LONG x, y, b;
+	POINT wp;
+	LONG b;
 	int i;
 	Rectangle r;
+
+	b = 0;
 
 	switch(msg) {
 	case WM_CREATE:
@@ -341,9 +344,13 @@ WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	case WM_MOUSEWHEEL:
 		if ((int)(wparam & 0xFFFF0000)>0)
-			b|=8;
+			b |=8;
 		else
-			b|=16;
+			b |=16;
+		wp.x = LOWORD(lparam);
+		wp.y = HIWORD(lparam);
+		ScreenToClient(hwnd, &wp);
+		goto case_WM_MOUSEANY;
 	case WM_MOUSEMOVE:
 	case WM_LBUTTONUP:
 	case WM_MBUTTONUP:
@@ -351,11 +358,11 @@ WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 	case WM_LBUTTONDOWN:
 	case WM_MBUTTONDOWN:
 	case WM_RBUTTONDOWN:
-		x = LOWORD(lparam);
-		y = HIWORD(lparam);
-		b = 0;
+		wp.x = LOWORD(lparam);
+		wp.y = HIWORD(lparam);
+	case_WM_MOUSEANY:
 		if(wparam & MK_LBUTTON)
-			b = 1;
+			b |= 1;
 		if(wparam & MK_MBUTTON)
 			b |= 2;
 		if(wparam & MK_RBUTTON) {
@@ -379,8 +386,8 @@ WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 			mouse.wi = (i+1)%Mousequeue;
 			mouse.ri = i;
 		}
-		mouse.queue[i].xy.x = x;
-		mouse.queue[i].xy.y = y;
+		mouse.queue[i].xy.x = wp.x;
+		mouse.queue[i].xy.y = wp.y;
 		mouse.queue[i].buttons = b;
 		mouse.queue[i].msec = ticks();
 		mouse.lastb = b;
@@ -427,6 +434,18 @@ WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 			break;
 		case VK_RIGHT:
 			kbdputc(kbdq, Kright);
+			break;
+		case VK_HOME:
+			kbdputc(kbdq, Khome);
+			break;
+		case VK_END:
+			kbdputc(kbdq, Kend);
+			break;
+		case VK_PRIOR:
+			kbdputc(kbdq, Kpgup);
+			break;
+		case VK_NEXT:
+			kbdputc(kbdq, Kpgdown);
 			break;
 		}
 		break;
@@ -540,18 +559,21 @@ setcolor(ulong index, ulong red, ulong green, ulong blue)
 {
 }
 
+int		fromutf16(char*,int,uchar*,int);
+int		toutf16(uchar*,int,char*,int);
 
 uchar*
 clipreadunicode(HANDLE h)
 {
 	Rune *p;
-	int n;
+	int n, nq;
 	uchar *q;
 	
 	p = GlobalLock(h);
-	n = wstrutflen(p)+1;
-	q = malloc(n);
-	wstrtoutf(q, p, n);
+	n = GlobalSize(h);
+	nq = n*UTFmax/2;
+	q = malloc(nq);
+	fromutf16(q, nq, p, n);
 	GlobalUnlock(h);
 
 	return q;
@@ -612,15 +634,11 @@ clipwrite(char *buf)
 		return -1;
 	}
 
-	h = GlobalAlloc(GMEM_MOVEABLE|GMEM_DDESHARE, (n+1)*sizeof(Rune));
+	h = GlobalAlloc(GMEM_MOVEABLE|GMEM_DDESHARE, 2*(n+1)*sizeof(Rune));
 	if(h == NULL)
 		panic("out of memory");
 	rp = GlobalLock(h);
-	p = buf;
-	e = p+n;
-	while(p<e)
-		p += chartorune(rp++, p);
-	*rp = 0;
+	toutf16(rp, GlobalSize(h), buf, n+1);
 	GlobalUnlock(h);
 
 	SetClipboardData(CF_UNICODETEXT, h);
